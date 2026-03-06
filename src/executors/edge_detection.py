@@ -1,15 +1,3 @@
-"""
-    Edge Detection Executor — detects edges in an input image.
-    Accepts two inputs:
-        - inputImage     : main image to process
-        - inputMaskImage : mask image (applied before edge detection)
-    Produces two outputs:
-        - outputEdgeImage : image showing detected edges
-        - outputStatImage : image showing edge statistics overlay
-    Supports two modes via dependentDropdown:
-        - Canny : user provides low threshold value
-        - Sobel : user selects kernel size (3x3, 5x5, 7x7)
-"""
 
 import os
 import cv2
@@ -30,7 +18,7 @@ class EdgeDetectionExecutor(Capsule):
         self.request.model = PackageModel(**(self.request.data))
         self.image = self.request.get_param("inputImage")
         self.mask_image = self.request.get_param("inputMaskImage")
-        self.detection_mode = self.request.get_param("DetectionMode")
+        self.detection_mode = self.request.get_param("detectionMode")
 
     @staticmethod
     def bootstrap(config: dict) -> dict:
@@ -39,7 +27,7 @@ class EdgeDetectionExecutor(Capsule):
     def apply_mask(self, image, mask):
         """
         Applies mask image to the main image.
-        Only pixels where mask is non-zero are kept.
+        If mask is None or empty, returns original image unchanged.
         """
         if mask is None:
             return image
@@ -50,22 +38,20 @@ class EdgeDetectionExecutor(Capsule):
     def detect_edges(self, image):
         """
         Detects edges based on selected detection mode.
-        DetectionModeCanny → uses user-defined low threshold
-        DetectionModeSobel → uses user-selected kernel size
+        detectionModeCanny → uses user-defined low threshold
+        detectionModeSobel → uses user-selected kernel size
         """
         mode_name = self.detection_mode.get("name")
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        if mode_name == "DetectionModeCanny":
-            # Canny edge detection with user-defined low threshold
+        if mode_name == "detectionModeCanny":
             low_threshold = float(
                 self.detection_mode.get("cannyThresholdLow", {}).get("value", 50.0)
             )
             high_threshold = low_threshold * 2
             edges = cv2.Canny(gray, low_threshold, high_threshold)
 
-        elif mode_name == "DetectionModeSobel":
-            # Sobel edge detection with user-selected kernel size
+        elif mode_name == "detectionModeSobel":
             kernel_value = self.detection_mode.get("sobelKernelSize", {}).get("value", "3")
             ksize = int(kernel_value)
             sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=ksize)
@@ -76,7 +62,6 @@ class EdgeDetectionExecutor(Capsule):
         else:
             edges = cv2.Canny(gray, 50, 100)
 
-        # Convert to 3-channel for consistent output format
         return cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
 
     def build_stat_image(self, original, edges):
@@ -105,11 +90,14 @@ class EdgeDetectionExecutor(Capsule):
         # Load main image
         img = Image.get_frame(img=self.image, redis_db=self.redis_db)
 
-        # Load mask image
-        mask = Image.get_frame(img=self.mask_image, redis_db=self.redis_db)
+        # Load mask image only if provided
+        mask_value = None
+        if self.mask_image is not None:
+            mask_img = Image.get_frame(img=self.mask_image, redis_db=self.redis_db)
+            mask_value = mask_img.value
 
-        # Apply mask to main image
-        masked = self.apply_mask(img.value, mask.value)
+        # Apply mask to main image (safe even if mask is None)
+        masked = self.apply_mask(img.value, mask_value)
 
         # Detect edges
         edges = self.detect_edges(masked)
@@ -121,8 +109,8 @@ class EdgeDetectionExecutor(Capsule):
         img.value = edges
         self.edge_image = Image.set_frame(img=img, package_uID=self.uID, redis_db=self.redis_db)
 
-        mask.value = stat
-        self.stat_image = Image.set_frame(img=mask, package_uID=self.uID, redis_db=self.redis_db)
+        img.value = stat
+        self.stat_image = Image.set_frame(img=img, package_uID=self.uID, redis_db=self.redis_db)
 
         packageModel = build_edge_detection_response(context=self)
         return packageModel
