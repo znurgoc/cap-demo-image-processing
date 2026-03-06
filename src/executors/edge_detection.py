@@ -38,10 +38,7 @@ class EdgeDetectionExecutor(Capsule):
         return {}
 
     def apply_mask(self, image, mask):
-        """
-        Applies mask image to the main image.
-        If mask is None, returns original image unchanged.
-        """
+
         if mask is None:
             return image
         mask_gray = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
@@ -90,6 +87,7 @@ class EdgeDetectionExecutor(Capsule):
         return stat_image
 
     def run(self):
+        # Load main image
         img = Image.get_frame(img=self.image, redis_db=self.redis_db)
 
         # Load mask only if provided
@@ -98,15 +96,19 @@ class EdgeDetectionExecutor(Capsule):
             mask_img = Image.get_frame(img=self.mask_image, redis_db=self.redis_db)
             mask_value = mask_img.value
 
+
         masked = self.apply_mask(img.value, mask_value)
         edges = self.detect_edges(masked)
         stat = self.build_stat_image(img.value, edges)
 
-        img.value = edges
-        self.edge_image = Image.set_frame(img=img, package_uID=self.uID, redis_db=self.redis_db)
 
-        img.value = stat
-        self.stat_image = Image.set_frame(img=img, package_uID=self.uID, redis_db=self.redis_db)
+        edge_img = Image.get_frame(img=self.image, redis_db=self.redis_db)
+        edge_img.value = edges
+        self.edge_image = Image.set_frame(img=edge_img, package_uID=self.uID, redis_db=self.redis_db)
+
+        stat_img = Image.get_frame(img=self.image, redis_db=self.redis_db)
+        stat_img.value = stat
+        self.stat_image = Image.set_frame(img=stat_img, package_uID=self.uID, redis_db=self.redis_db)
 
         packageModel = build_edge_detection_response(context=self)
         return packageModel
