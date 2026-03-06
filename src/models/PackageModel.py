@@ -396,4 +396,4 @@ class PackageModel(Package):
     configs: PackageConfigs
     type: Literal["capsule"] = "capsule"
     name: Literal["DemoImageProcessing"] = "DemoImageProcessing"
-    uID = "9900001"
+    uID: str = "9900001"
