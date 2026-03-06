@@ -26,7 +26,7 @@ class InputImage(Input):
 
 class InputMaskImage(Input):
     name: Literal["inputMaskImage"] = "inputMaskImage"
-    value: Union[List[Image], Image]
+    value: Optional[Union[List[Image], Image]] = None
     type: str = "object"
 
     @validator("type", pre=True, always=True)
@@ -36,6 +36,7 @@ class InputMaskImage(Input):
             return "object"
         elif isinstance(value, list):
             return "list"
+        return "object"
 
     class Config:
         title = "Mask Image"
@@ -234,8 +235,9 @@ class GrayscaleResponse(Response):
     outputs: GrayscaleOutputs
 
 
+# FIX: Executor name değeri class ismiyle birebir aynı (PascalCase)
 class GrayscaleExecutor(Config):
-    name: Literal["grayscaleExecutor"] = "grayscaleExecutor"
+    name: Literal["GrayscaleExecutor"] = "GrayscaleExecutor"
     value: Union[GrayscaleRequest, GrayscaleResponse]
     type: Literal["object"] = "object"
     field: Literal["option"] = "option"
@@ -249,12 +251,7 @@ class GrayscaleExecutor(Config):
 
 
 # =============================================================================
-# EXECUTOR 2 — EdgeDetectionExecutor
-# 2 inputs:  inputImage + inputMaskImage
-# 2 outputs: outputEdgeImage + outputStatImage
-# dependentDropdown: detectionMode
-#   Option 1 (detectionModeCanny) → textInput    (Canny threshold)
-#   Option 2 (detectionModeSobel) → dropdownlist (Sobel kernel size)
+
 # =============================================================================
 
 class CannyThresholdLow(Config):
@@ -366,7 +363,7 @@ class DetectionMode(Config):
 
 class EdgeDetectionInputs(Inputs):
     inputImage: InputImage
-    inputMaskImage: InputMaskImage
+    inputMaskImage: Optional[InputMaskImage] = None  # FIX: Optional — Pydantic won't crash if not provided
 
 
 class EdgeDetectionConfigs(Configs):
@@ -391,7 +388,7 @@ class EdgeDetectionResponse(Response):
 
 
 class EdgeDetectionExecutor(Config):
-    name: Literal["edgeDetectionExecutor"] = "edgeDetectionExecutor"
+    name: Literal["EdgeDetectionExecutor"] = "EdgeDetectionExecutor"
     value: Union[EdgeDetectionRequest, EdgeDetectionResponse]
     type: Literal["object"] = "object"
     field: Literal["option"] = "option"
@@ -408,8 +405,9 @@ class EdgeDetectionExecutor(Config):
 # PACKAGE LEVEL
 # =============================================================================
 
+
 class ConfigExecutor(Config):
-    name: Literal["configExecutor"] = "configExecutor"
+    name: Literal["ConfigExecutor"] = "ConfigExecutor"
     value: Union[GrayscaleExecutor, EdgeDetectionExecutor]
     type: Literal["executor"] = "executor"
     field: Literal["dependentDropdownlist"] = "dependentDropdownlist"

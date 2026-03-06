@@ -1,3 +1,15 @@
+"""
+    Edge Detection Executor — detects edges in an input image.
+    Accepts two inputs:
+        - inputImage     : main image to process
+        - inputMaskImage : mask image (optional, applied before edge detection)
+    Produces two outputs:
+        - outputEdgeImage : image showing detected edges
+        - outputStatImage : image showing edge statistics overlay
+    Supports two modes via dependentDropdown:
+        - Canny : user provides low threshold value
+        - Sobel : user selects kernel size (3x3, 5x5, 7x7)
+"""
 
 import os
 import cv2
@@ -8,6 +20,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../'))
 
 from sdks.novavision.src.media.image import Image
 from sdks.novavision.src.base.capsule import Capsule
+from sdks.novavision.src.helper.executor import Executor
 from components.cap_demo_image_processing.src.models.PackageModel import PackageModel
 from components.cap_demo_image_processing.src.utils.response import build_edge_detection_response
 
@@ -27,7 +40,7 @@ class EdgeDetectionExecutor(Capsule):
     def apply_mask(self, image, mask):
         """
         Applies mask image to the main image.
-        If mask is None or empty, returns original image unchanged.
+        If mask is None, returns original image unchanged.
         """
         if mask is None:
             return image
@@ -36,11 +49,6 @@ class EdgeDetectionExecutor(Capsule):
         return cv2.bitwise_and(image, image, mask=mask_binary)
 
     def detect_edges(self, image):
-        """
-        Detects edges based on selected detection mode.
-        detectionModeCanny → uses user-defined low threshold
-        detectionModeSobel → uses user-selected kernel size
-        """
         mode_name = self.detection_mode.get("name")
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -58,17 +66,12 @@ class EdgeDetectionExecutor(Capsule):
             sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=ksize)
             edges = cv2.magnitude(sobel_x, sobel_y)
             edges = np.clip(edges, 0, 255).astype(np.uint8)
-
         else:
             edges = cv2.Canny(gray, 50, 100)
 
         return cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
 
     def build_stat_image(self, original, edges):
-        """
-        Creates a statistics overlay image.
-        Shows edge pixels highlighted in green on the original image.
-        """
         stat_image = original.copy()
         edge_gray = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
         stat_image[edge_gray > 0] = [0, 255, 0]
@@ -87,25 +90,18 @@ class EdgeDetectionExecutor(Capsule):
         return stat_image
 
     def run(self):
-        # Load main image
         img = Image.get_frame(img=self.image, redis_db=self.redis_db)
 
-        # Load mask image only if provided
+        # Load mask only if provided
         mask_value = None
         if self.mask_image is not None:
             mask_img = Image.get_frame(img=self.mask_image, redis_db=self.redis_db)
             mask_value = mask_img.value
 
-        # Apply mask to main image (safe even if mask is None)
         masked = self.apply_mask(img.value, mask_value)
-
-        # Detect edges
         edges = self.detect_edges(masked)
-
-        # Build stat image
         stat = self.build_stat_image(img.value, edges)
 
-        # Save outputs
         img.value = edges
         self.edge_image = Image.set_frame(img=img, package_uID=self.uID, redis_db=self.redis_db)
 
@@ -114,3 +110,7 @@ class EdgeDetectionExecutor(Capsule):
 
         packageModel = build_edge_detection_response(context=self)
         return packageModel
+
+
+if __name__ == "__main__":
+    Executor(sys.argv[1]).run()
